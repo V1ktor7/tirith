@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tirith</title>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+:root{
+  --bg:#0c121c;--bg-panel:rgba(14,20,32,0.94);--border:rgba(100,160,230,0.32);--border-soft:rgba(100,160,230,0.14);
+  --accent:#5eb0ff;--accent-dim:rgba(94,176,255,0.12);--text:#e6edf5;--text-dim:#7a8aa0;--text-muted:#4a5a72;
+  --success:#5fd89a;--warn:#e8a84a;--danger:#e86666;--topbar-h:44px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--text)}
+body::after{content:'';position:fixed;top:var(--topbar-h);left:0;width:100%;height:calc(100% - var(--topbar-h));background:
+  linear-gradient(rgba(100,160,230,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(100,160,230,0.03) 1px,transparent 1px);
+  background-size:48px 48px;pointer-events:none;z-index:2;opacity:0.45}
+#topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);z-index:250;display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 16px;background:linear-gradient(180deg,rgba(10,16,26,0.98),rgba(8,12,20,0.96));border-bottom:1px solid var(--border-soft);gap:12px}
+.topbar-left{display:flex;align-items:baseline;gap:12px;flex-shrink:0}
+.topbar-logo{font-family:JetBrains Mono,monospace;font-size:1rem;font-weight:700;letter-spacing:0.35em;color:var(--accent)}
+.topbar-sub{font-size:0.58rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.12em;display:none}
+@media(min-width:720px){.topbar-sub{display:inline}}
+.topbar-class{font-size:0.52rem;color:var(--warn);letter-spacing:0.15em;text-transform:uppercase;flex:1;text-align:center;opacity:0.85}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.topbar-status{font-size:0.58rem;color:var(--text-dim);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar-btn{padding:6px 12px;font-family:inherit;font-size:0.62rem;font-weight:600;border-radius:4px;cursor:pointer;border:1px solid var(--border);background:rgba(20,28,42,0.9);color:var(--text-dim);transition:background .2s,border-color .2s,color .2s}
+.topbar-btn:hover{border-color:var(--accent);color:var(--accent)}
+.topbar-btn-primary{background:var(--accent-dim);border-color:rgba(94,176,255,0.45);color:var(--accent)}
+.topbar-btn-primary:hover{background:rgba(94,176,255,0.22);color:#fff}
+.topbar-btn:disabled{opacity:0.45;cursor:not-allowed}
+#cesiumContainer{position:absolute;top:var(--topbar-h);left:0;width:100%;height:calc(100% - var(--topbar-h));z-index:1}
+#leafletFallback{position:absolute;top:var(--topbar-h);left:0;width:100%;height:calc(100% - var(--topbar-h));z-index:1;display:none;background:var(--bg)}
+#loadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:10000;background:rgba(8,12,20,0.97);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.logo-load{font-size:2.2rem;color:var(--accent);font-family:JetBrains Mono,monospace;font-weight:700;margin-bottom:1rem;letter-spacing:0.4em;text-shadow:0 0 28px rgba(94,176,255,0.35)}
+.spinner{width:56px;height:56px;border:3px solid rgba(94,176,255,0.2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:1.5rem}
+.status{color:var(--accent);font-size:0.78rem;opacity:0.9}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+#sidebar{position:fixed;top:var(--topbar-h);left:0;width:330px;height:calc(100vh - var(--topbar-h));z-index:100;background:var(--bg-panel);backdrop-filter:blur(20px);border-right:1px solid var(--border-soft);overflow-y:auto;display:flex;flex-direction:column;scrollbar-width:thin;scrollbar-color:rgba(94,176,255,0.25) transparent}
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-thumb{background:rgba(94,176,255,0.3);border-radius:2px}
+.sb-head{padding:16px 14px;border-bottom:1px solid var(--border-soft);flex-shrink:0}
+.sb-logo{font-family:JetBrains Mono,monospace;font-size:1.05rem;font-weight:700;color:var(--accent);letter-spacing:0.28em}
+.sb-sub{font-size:0.55rem;color:var(--text-muted);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px}
+.sb-time{font-size:0.55rem;color:var(--text-muted);margin-top:6px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:12px 14px}
+.st{background:rgba(94,176,255,0.06);border:1px solid var(--border-soft);border-radius:6px;padding:10px 8px;text-align:center;transition:all .25s}
+.st:hover{border-color:rgba(94,176,255,0.4);background:rgba(94,176,255,0.1)}
+.st.w{grid-column:span 2}
+.st-v{font-size:1.35rem;font-weight:700;color:var(--accent);font-family:JetBrains Mono,monospace}
+.st-l{font-size:0.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-top:3px}
+.section{padding:10px 14px;border-top:1px solid var(--border-soft)}
+.section h3{font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px}
+.filters{display:flex;flex-wrap:wrap;gap:4px}
+.fbtn{padding:4px 9px;font-size:0.65rem;font-family:inherit;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--text-dim);border-radius:4px;cursor:pointer;transition:all .2s}
+.fbtn.on{background:var(--accent-dim);border-color:rgba(94,176,255,0.5);color:var(--accent)}
+.fbtn:hover{background:rgba(94,176,255,0.1);color:var(--accent)}
+.sinput{width:100%;padding:7px 10px;font-family:inherit;font-size:0.7rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-soft);color:var(--text);border-radius:5px;outline:none;transition:border .2s}
+.sinput:focus{border-color:var(--accent)}
+.sresults{max-height:180px;overflow-y:auto;margin-top:4px}
+.sitem{padding:5px 8px;font-size:0.65rem;cursor:pointer;border-radius:3px;color:var(--text-dim);transition:all .15s}
+.sitem:hover{background:rgba(94,176,255,0.1);color:var(--accent)}
+.rbtn{width:100%;padding:9px;font-family:inherit;font-size:0.7rem;font-weight:600;background:linear-gradient(135deg,rgba(94,176,255,0.14),rgba(94,176,255,0.04));border:1px solid rgba(94,176,255,0.35);color:var(--accent);border-radius:5px;cursor:pointer;transition:all .3s;margin-bottom:6px}
+.rbtn:hover{background:linear-gradient(135deg,rgba(94,176,255,0.22),rgba(94,176,255,0.08));box-shadow:0 0 14px rgba(94,176,255,0.12)}
+.rlist{max-height:180px;overflow-y:auto}
+.ritem{padding:5px 8px;font-size:0.6rem;color:var(--text-dim);border-left:2px solid rgba(94,176,255,0.35);margin-bottom:3px;padding-left:8px}
+.ritem .rd{color:var(--accent);font-size:0.55rem}
+.rdist{font-size:0.75rem;color:var(--accent);font-weight:600;margin-top:6px;text-align:center;font-family:JetBrains Mono,monospace}
+
+#rpanel{position:fixed;top:var(--topbar-h);right:0;width:370px;height:calc(100vh - var(--topbar-h));z-index:100;background:var(--bg-panel);backdrop-filter:blur(20px);border-left:1px solid var(--border-soft);overflow-y:auto;transform:translateX(100%);transition:transform .3s ease;scrollbar-width:thin;scrollbar-color:rgba(94,176,255,0.25) transparent}
+#rpanel.open{transform:translateX(0)}
+#rpanel::-webkit-scrollbar{width:4px}
+#rpanel::-webkit-scrollbar-thumb{background:rgba(94,176,255,0.3);border-radius:2px}
+.ptoggle{position:fixed;top:calc(50% + var(--topbar-h)/2);right:0;z-index:101;transform:translateY(-50%);padding:14px 7px;background:var(--bg-panel);border:1px solid var(--border-soft);border-right:none;color:var(--accent);cursor:pointer;font-family:JetBrains Mono,monospace;font-size:0.55rem;writing-mode:vertical-rl;letter-spacing:0.15em;border-radius:5px 0 0 5px;transition:all .3s}
+.ptoggle:hover{background:rgba(94,176,255,0.1)}
+.ptoggle.shifted{right:370px}
+.tabs{display:flex;border-bottom:1px solid var(--border-soft)}
+.tab{flex:1;padding:11px 6px;font-size:0.6rem;font-family:inherit;background:transparent;border:none;color:var(--text-muted);cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;transition:all .2s;border-bottom:2px solid transparent}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover{color:var(--text-dim)}
+.tpane{display:none;padding:14px}
+.tpane.on{display:block}
+.wcard{background:rgba(94,176,255,0.06);border:1px solid var(--border-soft);border-radius:7px;padding:14px;margin-bottom:10px}
+.wtemp{font-size:1.75rem;color:var(--accent);font-weight:700;font-family:JetBrains Mono,monospace}
+.wdesc{font-size:0.7rem;color:var(--text-dim);margin-top:3px}
+.wadv{margin-top:8px;padding:9px;border-radius:5px;font-size:0.65rem}
+.wadv.warn{background:rgba(232,102,102,0.1);border:1px solid rgba(232,102,102,0.28);color:#f0a0a0}
+.wadv.ok{background:rgba(95,216,154,0.08);border:1px solid rgba(95,216,154,0.25);color:var(--success)}
+.ncard{background:rgba(0,0,0,0.2);border:1px solid var(--border-soft);border-radius:5px;padding:9px;margin-bottom:5px}
+.ncard:hover{background:rgba(94,176,255,0.06)}
+.nn{font-size:0.7rem;font-weight:600;color:var(--text)}
+.ns{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap}
+.ns span{font-size:0.55rem;color:var(--text-muted)}
+.ns span b{color:var(--accent);font-weight:600;font-family:JetBrains Mono,monospace}
+.chartbox{position:relative;height:200px;margin:8px 0}
+.chartbox.tall{height:260px}
+
+#cpanel{position:fixed;top:calc(var(--topbar-h) + 8px);left:350px;width:350px;max-height:calc(100vh - var(--topbar-h) - 24px);z-index:150;background:var(--bg-panel);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:8px;overflow-y:auto;display:none;box-shadow:0 12px 40px rgba(0,0,0,0.45);scrollbar-width:thin;scrollbar-color:rgba(94,176,255,0.25) transparent}
+#cpanel.vis{display:block;animation:fadeIn .25s ease}
+#cpanel::-webkit-scrollbar{width:4px}
+#cpanel::-webkit-scrollbar-thumb{background:rgba(94,176,255,0.3);border-radius:2px}
+.cp-head{padding:14px;border-bottom:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:flex-start}
+.cp-name{font-size:0.95rem;font-weight:700;color:var(--accent)}
+.cp-addr{font-size:0.65rem;color:var(--text-dim);margin-top:3px}
+.cp-x{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;font-family:inherit}
+.cp-x:hover{color:var(--danger)}
+.cp-tags{padding:6px 14px;display:flex;flex-wrap:wrap;gap:3px}
+.cp-tag{padding:2px 7px;font-size:0.55rem;border-radius:10px;background:rgba(94,176,255,0.1);border:1px solid rgba(94,176,255,0.22);color:var(--accent)}
+.cp-sec{padding:8px 14px;border-top:1px solid var(--border-soft)}
+.cp-sec-t{font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
+.cp-item{padding:5px 7px;font-size:0.65rem;color:var(--text-dim);border-left:2px solid rgba(94,176,255,0.25);margin-bottom:3px;padding-left:8px}
+.cp-badge{font-size:0.55rem;padding:1px 5px;border-radius:3px;margin-left:4px}
+.cp-badge.g{background:rgba(95,216,154,0.15);color:var(--success)}
+.cp-badge.b{background:rgba(68,136,255,0.15);color:#7ab8ff}
+.cp-badge.y{background:rgba(232,168,74,0.15);color:var(--warn)}
+.cp-badge.d{background:rgba(255,255,255,0.04);color:var(--text-muted)}
+.cp-total{padding:10px 14px;border-top:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:center}
+.cp-total-l{font-size:0.65rem;color:var(--text-muted)}
+.cp-total-v{font-size:1rem;font-weight:700;color:var(--accent);font-family:JetBrains Mono,monospace}
+.cp-days{font-size:0.6rem;color:var(--text-muted);padding:0 14px 4px}
+.cp-actions{display:flex;flex-direction:column;gap:8px;padding:0 14px 14px}
+.cp-link{display:block;padding:8px;text-align:center;font-family:inherit;font-size:0.65rem;font-weight:600;background:rgba(94,176,255,0.1);border:1px solid rgba(94,176,255,0.28);color:var(--accent);border-radius:5px;cursor:pointer;text-decoration:none;transition:all .2s;width:100%}
+.cp-link:hover{background:rgba(94,176,255,0.18)}
+button.cp-link{font-family:inherit}
+.cp-link:disabled{opacity:.45;cursor:not-allowed}
+.cp-link:disabled:hover{background:rgba(94,176,255,0.1)}
+
+#aibtn{position:fixed;bottom:18px;right:18px;z-index:190;padding:11px 16px;font-family:inherit;font-size:0.72rem;font-weight:600;background:linear-gradient(135deg,rgba(94,176,255,0.18),rgba(94,176,255,0.05));border:1px solid rgba(94,176,255,0.35);color:var(--accent);border-radius:22px;cursor:pointer;transition:all .3s;box-shadow:0 0 16px rgba(94,176,255,0.08)}
+#aibtn:hover{box-shadow:0 0 24px rgba(94,176,255,0.18);transform:scale(1.03)}
+#aipanel{position:fixed;bottom:68px;right:18px;width:390px;height:480px;z-index:200;background:var(--bg-panel);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:10px;display:none;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,0.5)}
+#aipanel.open{display:flex;animation:fadeIn .25s ease}
+.ai-h{padding:10px 14px;border-bottom:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.ai-h h3{font-size:0.75rem;color:var(--accent);font-family:JetBrains Mono,monospace;letter-spacing:0.06em}
+.ai-x{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:.9rem;font-family:inherit}
+.ai-msgs{flex:1;overflow-y:auto;padding:12px;scrollbar-width:thin;scrollbar-color:rgba(94,176,255,0.25) transparent}
+.ai-msgs::-webkit-scrollbar{width:4px}
+.ai-msgs::-webkit-scrollbar-thumb{background:rgba(94,176,255,0.3);border-radius:2px}
+.ai-m{margin-bottom:10px;font-size:0.7rem;line-height:1.5}
+.ai-m.u{color:#7ab8ff;text-align:right}
+.ai-m.a{color:var(--text-dim)}
+.ai-m.s{color:var(--text-muted);font-style:italic;font-size:0.6rem}
+.ai-row{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border-soft);flex-shrink:0}
+.ai-in{flex:1;padding:7px 10px;font-family:inherit;font-size:0.7rem;background:rgba(0,0,0,0.25);border:1px solid var(--border-soft);color:var(--text);border-radius:5px;outline:none}
+.ai-in:focus{border-color:var(--accent)}
+.ai-go{padding:7px 14px;font-family:inherit;font-size:0.7rem;font-weight:600;background:rgba(94,176,255,0.12);border:1px solid rgba(94,176,255,0.35);color:var(--accent);border-radius:5px;cursor:pointer}
+.ai-go:hover{background:rgba(94,176,255,0.2)}
+
+.cesium-viewer-bottom,.cesium-viewer-animationContainer,.cesium-viewer-timelineContainer,.cesium-viewer-fullscreenContainer,.cesium-viewer-vrContainer,.cesium-viewer-geocoderContainer,.cesium-viewer-infoBoxContainer,.cesium-viewer-selectionIndicatorContainer,.cesium-viewer-navigationHelpButtonContainer{display:none!important}
+.cesium-viewer-toolbar{display:flex!important;flex-direction:column;gap:3px;top:auto!important;bottom:calc(118px + var(--topbar-h))!important;right:12px!important;left:auto!important}
+.cesium-toolbar-button,.cesium-button{cursor:pointer!important}
+.cesium-widget{background:var(--bg)!important}
+.cesium-credit-logoContainer,.cesium-credit-textContainer{display:none!important}
+.leaflet-tile{filter:brightness(0.25) saturate(0.2)}
+#setupHelp{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10001;max-width:520px;padding:22px 24px;background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;font-size:0.75rem;line-height:1.55;color:var(--text-dim);box-shadow:0 0 48px rgba(0,0,0,0.55)}
+#setupHelp h2{font-size:0.85rem;color:var(--accent);margin-bottom:12px;font-weight:700}
+#setupHelp code{font-size:0.65rem;background:rgba(0,0,0,0.35);padding:2px 6px;border-radius:4px;color:var(--accent);border:1px solid var(--border-soft)}
+#setupHelp ol{margin:10px 0 0 18px;color:#888}
+#setupHelp li{margin:6px 0}
+#mapZoomUi{display:none;position:fixed;right:14px;bottom:14px;z-index:95;flex-direction:column;gap:4px;pointer-events:auto}
+.map-zoom-btn{width:38px;height:38px;font-family:inherit;font-size:1.15rem;font-weight:700;line-height:1;color:var(--accent);background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:0}
+.map-zoom-btn:hover{background:rgba(94,176,255,0.12);border-color:var(--accent)}
+#mapNavHint{display:none;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:96;align-items:center;gap:10px;max-width:min(580px,94vw);padding:8px 14px;background:var(--bg-panel);border:1px solid var(--border-soft);border-radius:8px;font-size:0.58rem;color:var(--text-dim);line-height:1.4;text-align:center;flex-wrap:wrap;justify-content:center}
+#mapNavHintText{flex:1;min-width:200px}
+#mapNavHintX{padding:4px 10px;font-family:inherit;font-size:0.55rem;color:var(--text-muted);background:transparent;border:1px solid var(--border-soft);border-radius:4px;cursor:pointer;flex-shrink:0}
+#mapNavHintX:hover{color:var(--accent);border-color:var(--accent)}
+.weather-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border-soft)}
+.weather-toggle-row span{font-size:0.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em}
+.weather-toggle-row input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+#svModal{display:none;position:fixed;inset:0;z-index:12000;align-items:center;justify-content:center;padding:24px}
+#svModal.open{display:flex}
+.sv-backdrop{position:absolute;inset:0;background:rgba(4,8,14,0.78);backdrop-filter:blur(6px)}
+.sv-box{position:relative;z-index:1;width:min(960px,96vw);height:min(640px,86vh);background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.55)}
+.sv-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border-soft);font-size:0.72rem;color:var(--accent);font-weight:600;font-family:JetBrains Mono,monospace;letter-spacing:0.08em}
+.sv-close{background:transparent;border:1px solid var(--border-soft);color:var(--text-dim);width:32px;height:32px;border-radius:4px;cursor:pointer;font-family:inherit}
+.sv-close:hover{border-color:var(--danger);color:var(--danger)}
+.sv-body{flex:1;position:relative;min-height:0}
+#svFrame{width:100%;height:100%;border:0;display:block}
+.sv-fallback{padding:20px;font-size:0.75rem;color:var(--text-dim);line-height:1.5}
+.sv-fallback a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">TIRITH</span>
+    <span class="topbar-sub">Operational intelligence</span>
+  </div>
+  <div class="topbar-class">Notional · demo data</div>
+  <div class="topbar-right">
+    <span id="topbarStatus" class="topbar-status"></span>
+    <button type="button" class="topbar-btn" id="btnStreetTop" title="360 Street View at map or client">Street View</button>
+    <button type="button" class="topbar-btn topbar-btn-primary" id="btnRefresh">Refresh data</button>
+  </div>
+</div>
+<div id="loadingOverlay">
+  <div class="logo-load">TIRITH</div>
+  <div class="spinner"></div>
+  <div class="status" id="loadStatus">Initializing...</div>
+</div>
+<div id="setupHelp"></div>
+<div id="cesiumContainer"></div>
+<div id="leafletFallback"></div>
+<div id="mapNavHint" aria-live="polite"><span id="mapNavHintText"></span><button type="button" id="mapNavHintX">Hide</button></div>
+<div id="mapZoomUi" aria-label="Map zoom">
+  <button type="button" class="map-zoom-btn" id="mapZoomIn" title="Zoom in">+</button>
+  <button type="button" class="map-zoom-btn" id="mapZoomOut" title="Zoom out">-</button>
+</div>
+
+<div id="sidebar">
+  <div class="sb-head">
+    <div class="sb-logo">TIRITH</div>
+    <div class="sb-sub">Operational grid</div>
+    <div class="sb-time" id="lastUp">--:--</div>
+  </div>
+  <div class="stats">
+    <div class="st"><div class="st-v" id="sClients">--</div><div class="st-l">Total Clients</div></div>
+    <div class="st"><div class="st-v" id="sActive">--</div><div class="st-l">Upcoming Jobs</div></div>
+    <div class="st"><div class="st-v" id="sQuotes">--</div><div class="st-l">Total Quotes</div></div>
+    <div class="st"><div class="st-v" id="sRevenue">--</div><div class="st-l">Revenue (Paid)</div></div>
+    <div class="st w"><div class="st-v" id="sBooked">--</div><div class="st-l">Booked Clients</div></div>
+    <div class="st w"><div class="st-v" id="sHub">0</div><div class="st-l">At map hub (approx)</div></div>
+  </div>
+  <div class="section">
+    <h3>Map Filters</h3>
+    <div class="filters" id="filterBtns">
+      <button class="fbtn on" data-f="all">All</button>
+      <button class="fbtn" data-f="green">Active</button>
+      <button class="fbtn" data-f="blue">Quotes</button>
+      <button class="fbtn" data-f="red">Leads</button>
+      <button class="fbtn" data-f="yellow">Booked</button>
+      <button class="fbtn" data-f="orange">Commercial</button>
+    </div>
+  </div>
+  <div class="section">
+    <h3>Search Client</h3>
+    <input class="sinput" id="searchIn" placeholder="Type a name..."/>
+    <div class="sresults" id="searchRes"></div>
+  </div>
+  <div class="section">
+    <h3>Route Optimizer</h3>
+    <button class="rbtn" id="optBtn">Load Upcoming Jobs</button>
+    <div class="rlist" id="rList"></div>
+    <button class="rbtn" id="calcBtn" style="display:none">Calculate Route</button>
+    <div class="rdist" id="rDist"></div>
+  </div>
+</div>
+
+<button class="ptoggle" id="ptog">I N T E L</button>
+<div id="rpanel">
+  <div class="tabs">
+    <button class="tab on" data-t="weather">Weather</button>
+    <button class="tab" data-t="areas">Areas</button>
+    <button class="tab" data-t="trends">Trends</button>
+  </div>
+  <div class="tpane on" id="tp-weather">
+    <div class="weather-toggle-row">
+      <span>Show weather</span>
+      <input type="checkbox" id="weatherToggle" checked title="Fetch and show Aeris weather"/>
+    </div>
+    <div id="weatherBlock">
+      <div class="wcard"><div class="wtemp" id="wTemp">--C</div><div class="wdesc" id="wDesc">Loading...</div></div>
+      <div id="wAdv"></div>
+    </div>
+    <h4 style="font-size:.6rem;color:#5a6a82;text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px">Jobs by Month</h4>
+    <div class="chartbox"><canvas id="cMonths"></canvas></div>
+  </div>
+  <div class="tpane" id="tp-areas">
+    <h4 style="font-size:.6rem;color:#5a6a82;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Neighbourhood Scores</h4>
+    <div id="areaList"></div>
+  </div>
+  <div class="tpane" id="tp-trends">
+    <h4 style="font-size:.6rem;color:#5a6a82;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Service Demand by Month</h4>
+    <div class="chartbox tall"><canvas id="cDemand"></canvas></div>
+    <h4 style="font-size:.6rem;color:#5a6a82;text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px">Monthly Job Volume</h4>
+    <div class="chartbox"><canvas id="cVolume"></canvas></div>
+    <h4 style="font-size:.6rem;color:#5a6a82;text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px">ML service mix (weather + season)</h4>
+    <div id="mlPred" style="font-size:.65rem;color:#666;padding:4px 0">Start ml-service on port 8788, then GET /ingest.</div>
+  </div>
+</div>
+
+<div id="cpanel">
+  <div class="cp-head">
+    <div><div class="cp-name" id="cpN">--</div><div class="cp-addr" id="cpA">--</div></div>
+    <button class="cp-x" onclick="document.getElementById('cpanel').classList.remove('vis')">X</button>
+  </div>
+  <div class="cp-tags" id="cpT"></div>
+  <div class="cp-sec"><div class="cp-sec-t">Quotes</div><div id="cpQ"><span style="font-size:.65rem;color:#5a6a82">None</span></div></div>
+  <div class="cp-sec"><div class="cp-sec-t">Jobs</div><div id="cpJ"><span style="font-size:.65rem;color:#5a6a82">None</span></div></div>
+  <div class="cp-total"><span class="cp-total-l">Total Invoiced</span><span class="cp-total-v" id="cpTot">$0</span></div>
+  <div class="cp-days" id="cpDays">Last activity: --</div>
+  <div class="cp-actions">
+    <a class="cp-link" id="cpLink" href="#" target="_blank">Open in Jobber</a>
+    <button type="button" class="cp-link" id="cpStreetBtn">Street View (360)</button>
+    <button type="button" class="cp-link" id="cpCallCtxBtn">Get call context</button>
+  </div>
+</div>
+
+<div id="svModal" aria-hidden="true" role="dialog" aria-labelledby="svTitle">
+  <div class="sv-backdrop" id="svBackdrop"></div>
+  <div class="sv-box">
+    <div class="sv-head"><span id="svTitle">Street View</span><button type="button" class="sv-close" id="svClose" title="Close">X</button></div>
+    <div class="sv-body">
+      <iframe id="svFrame" title="Google Street View" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+      <div id="svFallback" class="sv-fallback" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<button id="aibtn" onclick="toggleAI()">Tirith AI</button>
+<div id="aipanel">
+  <div class="ai-h"><h3>Tirith AI</h3><button class="ai-x" onclick="toggleAI()">X</button></div>
+  <div class="ai-msgs" id="aiMsgs"><div class="ai-m s">Ready. Ask me anything about your business.</div></div>
+  <div class="ai-row">
+    <input class="ai-in" id="aiIn" placeholder="Ask about your business..."/>
+    <button class="ai-go" onclick="sendAI()">Send</button>
+  </div>
+</div>
+
+<script>
+var C = {
+  cesiumToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI2OGU4M2UyYS1iNjA2LTRmNjAtOTZjMi0yMzQ5MjIzNDA2NGYiLCJpZCI6NDE3ODE5LCJpYXQiOjE3NzYxMzI2MDd9.D03ARb1gEsabvu_vA-qKha0lipd0SWYRj3FQ5wyf9k0',
+  aerisId: '1ISV9S6pCqegePH0uDpQy',
+  aerisSec: 'PDQtmn7xq0FMINrXXpWAl9xRnat0voQFvzUzNxxp',
+  webhook: 'https://victormorency.app.n8n.cloud/webhook/9b2b7ad5-e1e4-43b4-81f2-60b4282f5126',
+  callContextWebhook: 'https://victormorency.app.n8n.cloud/webhook/1538759c-a0e9-4f22-9086-11b1237ec7e9',
+  osrm: 'http://router.project-osrm.org/route/v1/driving/',
+  nominatim: 'https://nominatim.openstreetmap.org/search',
+  mtl: {lat:45.5017,lng:-73.5673},
+  refresh: 600000,
+  mlApi: 'http://127.0.0.1:8788',
+  googleMapsEmbedKey: 'AIzaSyDDilCUzpGuLsVSvpEpPh3dGx6IQplrwok'
+};
+
+var lastSelectedClient=null;
+
+function setTopbarStatus(t){
+  var e=$('topbarStatus');
+  if(e)e.textContent=t||'';
+}
+
+function getStreetCoords(){
+  if(lastSelectedClient&&lastSelectedClient._lat!=null&&lastSelectedClient._lng!=null&&!isNaN(lastSelectedClient._lat)&&!isNaN(lastSelectedClient._lng))
+    return {lat:lastSelectedClient._lat,lng:lastSelectedClient._lng};
+  if(useCesium&&viewer&&typeof Cesium!=='undefined'){
+    var c=Cesium.Cartographic.fromCartesian(viewer.camera.position);
+    return {lat:Cesium.Math.toDegrees(c.latitude),lng:Cesium.Math.toDegrees(c.longitude)};
+  }
+  if(lmap){
+    var ll=lmap.getCenter();
+    return {lat:ll.lat,lng:ll.lng};
+  }
+  return {lat:C.mtl.lat,lng:C.mtl.lng};
+}
+
+function getStreetHeadingDeg(){
+  if(useCesium&&viewer&&typeof Cesium!=='undefined'){
+    var h=Cesium.Math.toDegrees(viewer.camera.heading);
+    return Math.round((h%360+360)%360);
+  }
+  return 0;
+}
+
+function closeStreetViewModal(){
+  var m=$('svModal'),fr=$('svFrame');
+  if(m){m.classList.remove('open');m.setAttribute('aria-hidden','true');}
+  if(fr)fr.src='about:blank';
+}
+
+function openStreetView(){
+  var p=getStreetCoords();
+  var lat=p.lat,lng=p.lng;
+  var key=C.googleMapsEmbedKey;
+  var modal=$('svModal'),iframe=$('svFrame'),fb=$('svFallback');
+  if(!modal)return;
+  var head=getStreetHeadingDeg();
+  $('svTitle').textContent='Street View · '+lat.toFixed(5)+', '+lng.toFixed(5);
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden','false');
+  if(key){
+    if(fb)fb.style.display='none';
+    if(iframe){
+      iframe.style.display='block';
+      iframe.src='https://www.google.com/maps/embed/v1/streetview?key='+encodeURIComponent(key)+'&location='+lat+','+lng+'&heading='+head+'&pitch=5&fov=85';
+    }
+  }else{
+    if(iframe)iframe.style.display='none';
+    if(fb){
+      fb.style.display='block';
+      var url='https://www.google.com/maps/@?api=1&map_action=pano&viewpoint='+lat+','+lng;
+      fb.innerHTML='<p>Add <code>C.googleMapsEmbedKey</code> for embedded 360, or open Street View in a new tab.</p><p><a href="'+esc(url)+'" target="_blank" rel="noopener">Open in Google Maps</a></p>';
+    }
+  }
+}
+
+async function refreshData(){
+  var btn=$('btnRefresh');
+  if(btn)btn.disabled=true;
+  setTopbarStatus('Refreshing…');
+  try{
+    var ok=await fetchData();
+    if(!ok){setTopbarStatus('Refresh failed');return;}
+    buildClients();
+    enrich();
+    setTopbarStatus('Updating map…');
+    await geocode();
+    renderPins();
+    updateStats();
+    syncWeatherBlock();
+    if($('weatherToggle')&&$('weatherToggle').checked)await loadWeather();
+    try{buildCharts();}catch(e){console.error('Charts:',e);}
+    try{buildAreas();}catch(e){console.error('Areas:',e);}
+    try{await loadMLPredict();}catch(e){console.warn('ML:',e);}
+    setTopbarStatus('Updated '+new Date().toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'}));
+    window.setTimeout(function(){setTopbarStatus('');},3500);
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
+// Raw data from webhook
+var RAW = {clients:[],jobs:[],quotes:[],invoices:[],requests:[]};
+// Unified client list built from all sources
+var CLIENTS = [];
+var GEO = JSON.parse(localStorage.getItem('qc_geo5')||'{}');
+var viewer=null, lmap=null, lmarkers=[], centities=[], routeEnt=null;
+var useCesium=true, filters=new Set(['all']), routeStops=[];
+
+var $=function(id){return document.getElementById(id);};
+var setLoadStatus=function(m){var e=$('loadStatus');if(e)e.textContent=m;};
+var fmt$=function(n){return '$'+(Number(n)||0).toLocaleString('en-CA',{minimumFractionDigits:0,maximumFractionDigits:0});};
+var esc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+
+// ===== FETCH =====
+async function fetchData(){
+  setLoadStatus('Connecting to Jobber...');
+  try{
+    var r=await fetch(C.webhook,{headers:{'Accept':'application/json'}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var raw=await r.json();
+    if(Array.isArray(raw)) raw=raw[0];
+    if(!raw||(!raw.clients&&!raw.jobs)) throw new Error('Bad response');
+    RAW.clients=raw.clients||[];
+    RAW.jobs=raw.jobs||[];
+    RAW.quotes=raw.quotes||[];
+    RAW.invoices=raw.invoices||[];
+    RAW.requests=raw.requests||[];
+    localStorage.setItem('qc_raw5',JSON.stringify(RAW));
+    setLoadStatus('Loaded '+RAW.clients.length+' clients, '+RAW.jobs.length+' jobs, '+RAW.quotes.length+' quotes, '+RAW.invoices.length+' invoices');
+    return true;
+  }catch(e){
+    console.warn('Webhook fail:',e);
+    setLoadStatus('Offline - cached data');
+    var c=localStorage.getItem('qc_raw5');
+    if(c){RAW=JSON.parse(c);return true;}
+    return false;
+  }
+}
+
+// ===== PHONE FIELDS (Jobber / webhook shape varies) =====
+function assignClientPhoneFields(dst, src){
+  if(!dst||!src||typeof src!=='object')return;
+  if((dst.phone==null||String(dst.phone).trim()==='')&&src.phone!=null&&String(src.phone).trim()!=='')
+    dst.phone=src.phone;
+  if((dst.mobile==null||String(dst.mobile).trim()==='')&&src.mobile!=null&&String(src.mobile).trim()!=='')
+    dst.mobile=src.mobile;
+  if((dst.homePhone==null||String(dst.homePhone).trim()==='')&&src.homePhone!=null&&String(src.homePhone).trim()!=='')
+    dst.homePhone=src.homePhone;
+  if((dst.workPhone==null||String(dst.workPhone).trim()==='')&&src.workPhone!=null&&String(src.workPhone).trim()!=='')
+    dst.workPhone=src.workPhone;
+  if((!dst.phones||!dst.phones.length)&&src.phones&&src.phones.length)
+    dst.phones=src.phones;
+}
+
+function pickPhoneFromClientLike(obj){
+  if(!obj||typeof obj!=='object')return '';
+  var keys=['phone','mobile','homePhone','workPhone'];
+  for(var k=0;k<keys.length;k++){
+    var v=obj[keys[k]];
+    if(v!=null&&String(v).trim()!=='')return String(v).trim();
+  }
+  if(obj.phones&&Array.isArray(obj.phones)){
+    for(var i=0;i<obj.phones.length;i++){
+      var p=obj.phones[i];
+      var n=p&&typeof p==='object'?(p.number||p.phone||p.raw||''):p;
+      if(n!=null&&String(n).trim()!=='')return String(n).trim();
+    }
+  }
+  return '';
+}
+
+function computeClientPhone(c){
+  var s=pickPhoneFromClientLike(c);
+  if(s)return s;
+  var lists=[c._jobs,c._quotes,c._invoices,c._requests];
+  for(var li=0;li<lists.length;li++){
+    var L=lists[li];
+    for(var u=0;u<L.length;u++){
+      s=pickPhoneFromClientLike(L[u].client);
+      if(s)return s;
+    }
+  }
+  return '';
+}
+
+// ===== BUILD UNIFIED CLIENT LIST =====
+// The webhook returns 60 clients but 71+ unique clients appear in jobs/quotes/invoices.
+// We merge all sources into one unified list.
+function buildClients(){
+  var map={};
+
+  // 1. Seed from clients array (has billingAddress + tags)
+  RAW.clients.forEach(function(c){
+    map[c.id]={
+      id:c.id, name:c.name, createdAt:c.createdAt, updatedAt:c.updatedAt,
+      jobberWebUri:c.jobberWebUri,
+      billingAddress:c.billingAddress, // {street,city,province,postalCode} or null
+      tags:c.tags, // {nodes:[{label:"..."}]}
+      _src:'clients'
+    };
+    assignClientPhoneFields(map[c.id], c);
+  });
+
+  // 2. Add clients from jobs (has property.address)
+  RAW.jobs.forEach(function(j){
+    var cid=j.client.id;
+    if(!map[cid]){
+      map[cid]={
+        id:cid, name:j.client.name, createdAt:j.createdAt,
+        billingAddress:null, tags:{nodes:[]}, jobberWebUri:null, _src:'jobs'
+      };
+    }
+    assignClientPhoneFields(map[cid], j.client);
+    // Use property address if client has no billing address
+    if(j.property&&j.property.address&&!map[cid].billingAddress){
+      map[cid].billingAddress=j.property.address;
+    }
+  });
+
+  // 3. Add clients from quotes
+  RAW.quotes.forEach(function(q){
+    var cid=q.client.id;
+    if(!map[cid]){
+      var nm=q.client.name||(q.client.firstName||'')+' '+(q.client.lastName||'');
+      map[cid]={
+        id:cid, name:nm.trim(), createdAt:q.createdAt,
+        billingAddress:null, tags:{nodes:[]}, jobberWebUri:null, _src:'quotes'
+      };
+    }
+    assignClientPhoneFields(map[cid], q.client);
+    if(q.property&&q.property.address&&!map[cid].billingAddress){
+      map[cid].billingAddress=q.property.address;
+    }
+  });
+
+  // 4. Add clients from invoices
+  RAW.invoices.forEach(function(i){
+    var cid=i.client.id;
+    if(!map[cid]){
+      map[cid]={
+        id:cid, name:i.client.name, createdAt:i.createdAt,
+        billingAddress:null, tags:{nodes:[]}, jobberWebUri:null, _src:'invoices'
+      };
+    }
+    assignClientPhoneFields(map[cid], i.client);
+    if(i.property&&i.property.address&&!map[cid].billingAddress){
+      map[cid].billingAddress=i.property.address;
+    }
+  });
+
+  // 5. Add clients from requests (has property.address)
+  RAW.requests.forEach(function(r){
+    var cid=r.client.id;
+    if(!map[cid]){
+      map[cid]={
+        id:cid, name:r.client.name, createdAt:r.createdAt,
+        billingAddress:null, tags:{nodes:[]}, jobberWebUri:null, _src:'requests'
+      };
+    }
+    assignClientPhoneFields(map[cid], r.client);
+    if(r.property&&r.property.address&&!map[cid].billingAddress){
+      map[cid].billingAddress=r.property.address;
+    }
+  });
+
+  // Convert to array and enrich
+  CLIENTS=Object.values(map);
+  console.log('Unified clients:',CLIENTS.length);
+}
+
+// ===== ENRICH =====
+function enrich(){
+  var today=new Date().toISOString().split('T')[0];
+  function addrParts(addr){
+    if(!addr)return '';
+    return [addr.street,addr.city,addr.province,addr.postalCode].filter(Boolean).join(', ');
+  }
+
+  CLIENTS.forEach(function(c){
+    // Parse tags: Jobber format is {nodes:[{label:"..."}]}
+    var rawTags=[];
+    if(c.tags&&c.tags.nodes&&Array.isArray(c.tags.nodes)){
+      rawTags=c.tags.nodes.map(function(n){return n.label||'';}).filter(Boolean);
+    }
+    c._tagsRaw=rawTags;
+    c._tags=rawTags.map(function(t){return t.toLowerCase().trim();});
+
+    // Cross-reference (before address so we can mine property addresses)
+    c._jobs=RAW.jobs.filter(function(j){return j.client.id===c.id;});
+    c._quotes=RAW.quotes.filter(function(q){return q.client.id===c.id;});
+    c._invoices=RAW.invoices.filter(function(i){return i.client.id===c.id;});
+    c._requests=RAW.requests.filter(function(r){return r.client.id===c.id;});
+
+    c._phone=computeClientPhone(c)||'';
+
+    // Address: billing first, then any linked job/quote/request/invoice property
+    c._addr=addrParts(c.billingAddress);
+    if(!c._addr||c._addr.trim().length<2){
+      var lists=[c._jobs,c._quotes,c._requests,c._invoices];
+      for(var li=0;li<lists.length;li++){
+        var L=lists[li];
+        for(var u=0;u<L.length;u++){
+          var pr=L[u].property;
+          if(pr&&pr.address){
+            var s=addrParts(pr.address);
+            if(s&&s.trim().length>=2){c._addr=s;break;}
+          }
+        }
+        if(c._addr&&c._addr.trim().length>=2)break;
+      }
+    }
+
+    // Revenue (paid invoices)
+    c._totalInvoiced=c._invoices.reduce(function(s,i){
+      return s+parseFloat(i.total||0);
+    },0);
+    c._paidTotal=c._invoices.filter(function(i){return i.invoiceStatus==='paid';}).reduce(function(s,i){return s+parseFloat(i.total||0);},0);
+
+    // Last activity
+    var dates=[];
+    if(c.updatedAt) dates.push(new Date(c.updatedAt));
+    c._jobs.forEach(function(j){if(j.createdAt) dates.push(new Date(j.createdAt));});
+    c._invoices.forEach(function(i){if(i.createdAt) dates.push(new Date(i.createdAt));});
+    dates=dates.filter(function(d){return !isNaN(d);});
+    c._lastActivity=dates.length?new Date(Math.max.apply(null,dates)):null;
+    c._daysSince=c._lastActivity?Math.floor((Date.now()-c._lastActivity.getTime())/86400000):null;
+
+    // Jobber link (prefer client's own, fallback to first job/quote)
+    if(!c.jobberWebUri){
+      if(c._jobs.length) c.jobberWebUri=c._jobs[0].jobberWebUri;
+      else if(c._quotes.length) c.jobberWebUri=c._quotes[0].jobberWebUri;
+    }
+
+    // ===== PIN COLOR =====
+    // Job statuses: upcoming, archived, unscheduled, late
+    var hasUpcoming=c._jobs.some(function(j){
+      return j.jobStatus==='upcoming'||j.jobStatus==='active'||j.jobStatus==='today'||j.jobStatus==='in_progress';
+    });
+    var tags=c._tags;
+    var isBooked=tags.indexOf('booked')>=0;
+    var isCommercial=tags.indexOf('commercial')>=0;
+    var hasQuoteSent=tags.indexOf('quote sent')>=0;
+    var hasQuote=c._quotes.length>0;
+
+    if(hasUpcoming) c._pin='green';
+    else if(isBooked) c._pin='yellow';
+    else if(hasQuoteSent||hasQuote) c._pin='blue';
+    else if(isCommercial) c._pin='orange';
+    else c._pin='red';
+  });
+}
+
+// ===== GEOCODE =====
+function geoAddrKey(s){return(s&&String(s).trim())||'';}
+
+function ensureMapCoords(){
+  CLIENTS.forEach(function(c){
+    if(c._lat==null||c._lng==null||isNaN(c._lat)||isNaN(c._lng)){
+      c._lat=C.mtl.lat;c._lng=C.mtl.lng;c._fb=true;
+    }
+  });
+}
+
+async function geocode(){
+  var seenAddr={},need=[];
+  CLIENTS.forEach(function(c){
+    var k=geoAddrKey(c._addr);
+    if(k.length<1||GEO[k]||seenAddr[k])return;
+    seenAddr[k]=1;
+    need.push(c);
+  });
+  var done=0;
+  for(var i=0;i<need.length;i++){
+    var c=need[i];
+    var k=geoAddrKey(c._addr);
+    setLoadStatus('Geocoding '+(++done)+'/'+need.length+'...');
+    try{
+      var q=encodeURIComponent(k);
+      var r=await fetch(C.nominatim+'?format=json&q='+q+'&limit=1&countrycodes=ca');
+      var res=await r.json();
+      if(res&&res.length>0){
+        GEO[k]={lat:parseFloat(res[0].lat),lng:parseFloat(res[0].lon)};
+      }else{
+        GEO[k]={lat:C.mtl.lat,lng:C.mtl.lng,fb:true};
+      }
+    }catch(e){
+      GEO[k]={lat:C.mtl.lat,lng:C.mtl.lng,fb:true};
+    }
+    localStorage.setItem('qc_geo5',JSON.stringify(GEO));
+    if(i<need.length-1) await new Promise(function(r){setTimeout(r,350);});
+  }
+  CLIENTS.forEach(function(c){
+    var key=geoAddrKey(c._addr);
+    if(!key)return;
+    var g=GEO[key];
+    if(g){c._lat=g.lat;c._lng=g.lng;c._fb=!!g.fb;}
+  });
+
+  var nmList=CLIENTS.filter(function(c){
+    return (c._lat==null||c._lng==null||isNaN(c._lat)||isNaN(c._lng))&&c.name;
+  });
+  done=0;
+  for(var j=0;j<nmList.length;j++){
+    var cl=nmList[j];
+    var nk='__nm__'+cl.id;
+    setLoadStatus('Locating '+(++done)+'/'+nmList.length+' (name)…');
+    if(!GEO[nk]){
+      try{
+        var qq=encodeURIComponent(String(cl.name).trim()+', Montreal, Quebec, Canada');
+        var r2=await fetch(C.nominatim+'?format=json&q='+qq+'&limit=1&countrycodes=ca');
+        var res2=await r2.json();
+        if(res2&&res2.length>0){
+          GEO[nk]={lat:parseFloat(res2[0].lat),lng:parseFloat(res2[0].lon),fb:false};
+        }else{
+          GEO[nk]={lat:C.mtl.lat,lng:C.mtl.lng,fb:true};
+        }
+      }catch(e2){
+        GEO[nk]={lat:C.mtl.lat,lng:C.mtl.lng,fb:true};
+      }
+      localStorage.setItem('qc_geo5',JSON.stringify(GEO));
+      if(j<nmList.length-1) await new Promise(function(r){setTimeout(r,350);});
+    }
+    var gn=GEO[nk];
+    if(gn){cl._lat=gn.lat;cl._lng=gn.lng;cl._fb=!!gn.fb;}
+  }
+
+  ensureMapCoords();
+}
+
+// ===== MAP ZOOM (+ / -) =====
+function mapZoomInAction(){
+  if(useCesium&&viewer&&typeof Cesium!=='undefined'){
+    var h=Cesium.Cartographic.fromCartesian(viewer.camera.position).height;
+    viewer.camera.zoomIn(Math.max(200,h*0.28));
+  }else if(lmap){lmap.zoomIn(1);}
+}
+function mapZoomOutAction(){
+  if(useCesium&&viewer&&typeof Cesium!=='undefined'){
+    var h=Cesium.Cartographic.fromCartesian(viewer.camera.position).height;
+    viewer.camera.zoomOut(Math.max(400,h*0.28));
+  }else if(lmap){lmap.zoomOut(1);}
+}
+
+// ===== CESIUM =====
+function initCesium(){
+  setLoadStatus('Initializing 3D globe...');
+  try{
+    if(typeof Cesium==='undefined') throw new Error('No Cesium');
+    Cesium.Ion.defaultAccessToken=C.cesiumToken;
+    viewer=new Cesium.Viewer('cesiumContainer',{
+      terrain:Cesium.Terrain.fromWorldTerrain(),
+      animation:false,timeline:false,fullscreenButton:false,vrButton:false,
+      geocoder:false,homeButton:false,navigationHelpButton:false,
+      baseLayerPicker:false,sceneModePicker:true,infoBox:false,selectionIndicator:false,
+      skyBox:false,skyAtmosphere:false,
+      contextOptions:{webgl:{alpha:true}}
+    });
+    var camCtrl=viewer.scene.screenSpaceCameraController;
+    camCtrl.enableRotate=true;
+    camCtrl.enableTranslate=true;
+    camCtrl.enableTilt=true;
+    camCtrl.enableZoom=true;
+    camCtrl.enableLook=false;
+    camCtrl.zoomEventTypes=[Cesium.CameraEventType.WHEEL,Cesium.CameraEventType.PINCH];
+    camCtrl.rotateEventTypes=[Cesium.CameraEventType.LEFT_DRAG];
+    camCtrl.translateEventTypes=[Cesium.CameraEventType.RIGHT_DRAG];
+    camCtrl.tiltEventTypes=[
+      Cesium.CameraEventType.MIDDLE_DRAG,
+      {eventType:Cesium.CameraEventType.LEFT_DRAG,modifier:Cesium.KeyboardEventModifier.CTRL},
+      {eventType:Cesium.CameraEventType.RIGHT_DRAG,modifier:Cesium.KeyboardEventModifier.CTRL}
+    ];
+    camCtrl.inertiaSpin=0.92;
+    camCtrl.inertiaTranslate=0.9;
+    camCtrl.inertiaZoom=0.82;
+    camCtrl.minimumZoomDistance=50;
+    camCtrl.maximumZoomDistance=500000000;
+    viewer.scene.globe.depthTestAgainstTerrain=true;
+    viewer.scene.backgroundColor=Cesium.Color.fromCssColorString('#0a0a0a');
+    viewer.scene.globe.baseColor=Cesium.Color.fromCssColorString('#111');
+    viewer.scene.fog.enabled=false;
+    viewer.scene.globe.showGroundAtmosphere=false;
+    try{
+      Cesium.Cesium3DTileset.fromIonAssetId(2275207).then(function(ts){viewer.scene.primitives.add(ts);}).catch(function(){});
+    }catch(e){}
+    viewer.camera.flyTo({
+      destination:Cesium.Cartesian3.fromDegrees(C.mtl.lng,C.mtl.lat,18000),
+      orientation:{heading:0,pitch:Cesium.Math.toRadians(-50),roll:0},
+      duration:0
+    });
+    var h=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    h.setInputAction(function(e){
+      var p=viewer.scene.pick(e.position);
+      if(Cesium.defined(p)&&p.id&&p.id._qc) showClient(p.id._qc);
+    },Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    useCesium=true;
+    var mzu=$('mapZoomUi');if(mzu)mzu.style.display='flex';
+    showMapNavHint(true);
+    return true;
+  }catch(e){
+    console.error('Cesium fail:',e);
+    useCesium=false;
+    return false;
+  }
+}
+
+function initLeaflet(){
+  $('cesiumContainer').style.display='none';
+  $('leafletFallback').style.display='block';
+  lmap=L.map('leafletFallback',{zoomControl:true,scrollWheelZoom:true,touchZoom:true,doubleClickZoom:true,boxZoom:true,dragging:true}).setView([C.mtl.lat,C.mtl.lng],13);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'',maxZoom:19}).addTo(lmap);
+  useCesium=false;
+  var mzu=$('mapZoomUi');if(mzu)mzu.style.display='flex';
+  showMapNavHint(false);
+}
+
+function showMapNavHint(cesium){
+  var el=$('mapNavHint'),tx=$('mapNavHintText');
+  if(!el||!tx)return;
+  if(localStorage.getItem('qc_mapHint')==='0'){el.style.display='none';return;}
+  tx.textContent=cesium
+    ?'Globe: scroll or pinch to zoom · left-drag to orbit (360) · right-drag to pan · middle-drag or Ctrl+drag to tilt toward horizon (street-style). Use 2D/3D/CV in the Cesium toolbar for map modes. Not Google Street View imagery.'
+    :'Map: scroll wheel or pinch to zoom · drag to pan · +/− buttons. 3D globe controls are unavailable in flat map mode.';
+  el.style.display='flex';
+}
+
+// ===== PINS =====
+var PCOL={green:'#5fd89a',red:'#e86666',blue:'#5eb0ff',yellow:'#e8c44a',orange:'#e8a84a'};
+function pinImg(color,glow){
+  var cv=document.createElement('canvas');cv.width=32;cv.height=32;
+  var x=cv.getContext('2d');
+  if(glow){x.beginPath();x.arc(16,16,14,0,Math.PI*2);x.fillStyle=color+'33';x.fill();}
+  x.beginPath();x.arc(16,16,7,0,Math.PI*2);x.fillStyle=color;x.fill();
+  x.beginPath();x.arc(14,14,2.5,0,Math.PI*2);x.fillStyle='#ffffff33';x.fill();
+  return cv.toDataURL();
+}
+
+function renderPins(){
+  if(useCesium&&viewer){centities.forEach(function(e){viewer.entities.remove(e);});centities=[];}
+  else if(lmap){lmarkers.forEach(function(m){lmap.removeLayer(m);});lmarkers=[];}
+  var all=filters.has('all'),cnt=0;
+  CLIENTS.forEach(function(c){
+    if(c._lat==null||c._lng==null) return;
+    if(!all&&!filters.has(c._pin)) return;
+    cnt++;
+    var col=PCOL[c._pin]||'#fff';
+    if(useCesium&&viewer){
+      var ent=viewer.entities.add({
+        position:Cesium.Cartesian3.fromDegrees(c._lng,c._lat),
+        billboard:{
+          image:pinImg(col,c._pin==='green'),
+          width:22,height:22,
+          verticalOrigin:Cesium.VerticalOrigin.CENTER,
+          heightReference:Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance:Number.POSITIVE_INFINITY
+        },
+        label:{
+          text:c.name,
+          font:'11px JetBrains Mono',
+          fillColor:Cesium.Color.fromCssColorString(col),
+          outlineColor:Cesium.Color.BLACK,outlineWidth:2,
+          style:Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin:Cesium.VerticalOrigin.TOP,
+          pixelOffset:new Cesium.Cartesian2(0,14),
+          distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,5000),
+          disableDepthTestDistance:Number.POSITIVE_INFINITY
+        }
+      });
+      ent._qc=c;
+      centities.push(ent);
+    }else if(lmap){
+      var icon=L.divIcon({
+        className:'',
+        html:'<div style="width:12px;height:12px;border-radius:50%;background:'+col+';box-shadow:0 0 6px '+col+'88;border:2px solid '+col+'44"></div>',
+        iconSize:[12,12],iconAnchor:[6,6]
+      });
+      var m=L.marker([c._lat,c._lng],{icon:icon}).addTo(lmap);
+      m.on('click',(function(cl){return function(){showClient(cl);};})(c));
+      lmarkers.push(m);
+    }
+  });
+  console.log('Rendered '+cnt+' pins');
+}
+
+// ===== CLIENT PANEL =====
+function sendCallContext(){
+  if(!C.callContextWebhook)return;
+  var c=lastSelectedClient;
+  if(!c||!String(c._phone||'').trim())return;
+  var btn=$('cpCallCtxBtn');
+  if(!btn)return;
+  var prev=btn.textContent;
+  btn.disabled=true;
+  btn.textContent='Sending…';
+  fetch(C.callContextWebhook,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({phone:c._phone,clientId:c.id,name:c.name})
+  }).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    setTopbarStatus('Call context sent');
+    setTimeout(function(){setTopbarStatus('');},2500);
+  }).catch(function(e){
+    setTopbarStatus('Call context failed');
+    alert('Call context webhook failed: '+e.message);
+  }).finally(function(){
+    btn.textContent=prev;
+    var cur=lastSelectedClient;
+    btn.disabled=!cur||!String(cur._phone||'').trim();
+    if(btn.disabled)btn.title='No phone number in Jobber payload for this client';
+    else btn.title='';
+  });
+}
+
+function showClient(c){
+  lastSelectedClient=c;
+  $('cpN').textContent=c.name;
+  $('cpA').textContent=c._addr||'No address';
+  $('cpT').innerHTML=c._tagsRaw.length
+    ?c._tagsRaw.map(function(t){return '<span class="cp-tag">'+esc(t)+'</span>';}).join('')
+    :'<span style="font-size:.6rem;color:#5a6a82">No tags</span>';
+  if(c._quotes.length){
+    $('cpQ').innerHTML=c._quotes.map(function(q){
+      return '<div class="cp-item">'+esc(q.title||'Quote #'+q.quoteNumber)+' <span class="cp-badge b">quote</span></div>';
+    }).join('');
+  }else $('cpQ').innerHTML='<span style="font-size:.65rem;color:#5a6a82">None</span>';
+  if(c._jobs.length){
+    $('cpJ').innerHTML=c._jobs.map(function(j){
+      var cls=j.jobStatus==='upcoming'?'g':j.jobStatus==='archived'?'d':'y';
+      return '<div class="cp-item">'+esc(j.title||'Job #'+j.jobNumber)+' <span class="cp-badge '+cls+'">'+esc(j.jobStatus)+'</span></div>';
+    }).join('');
+  }else $('cpJ').innerHTML='<span style="font-size:.65rem;color:#5a6a82">None</span>';
+  $('cpTot').textContent=fmt$(c._totalInvoiced);
+  $('cpDays').textContent=c._daysSince!=null?'Last activity: '+c._daysSince+' days ago':'Last activity: Unknown';
+  $('cpLink').href=c.jobberWebUri||'#';
+  var ccBtn=$('cpCallCtxBtn');
+  if(ccBtn){
+    ccBtn.textContent='Get call context';
+    var hasPhone=!!String(c._phone||'').trim();
+    ccBtn.disabled=!hasPhone;
+    ccBtn.title=hasPhone?'':'No phone number in Jobber payload for this client';
+  }
+  $('cpanel').classList.add('vis');
+}
+
+// ===== STATS =====
+function updateStats(){
+  var now=new Date();
+  $('sClients').textContent=CLIENTS.length;
+  $('sActive').textContent=RAW.jobs.filter(function(j){return j.jobStatus==='upcoming';}).length;
+  $('sQuotes').textContent=RAW.quotes.length;
+  $('sBooked').textContent=CLIENTS.filter(function(c){return c._tags.indexOf('booked')>=0;}).length;
+  var paid=RAW.invoices.filter(function(i){return i.invoiceStatus==='paid';}).reduce(function(s,i){return s+parseFloat(i.total||0);},0);
+  $('sRevenue').textContent=fmt$(paid);
+  var hubEl=$('sHub');
+  if(hubEl)hubEl.textContent=String(CLIENTS.filter(function(c){return c._fb;}).length);
+  $('lastUp').textContent='Updated '+now.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ===== FILTERS =====
+$('filterBtns').addEventListener('click',function(e){
+  var btn=e.target.closest('.fbtn');if(!btn) return;
+  var f=btn.dataset.f;
+  if(f==='all'){
+    filters=new Set(['all']);
+    document.querySelectorAll('.fbtn').forEach(function(b){b.classList.toggle('on',b.dataset.f==='all');});
+  }else{
+    filters.delete('all');
+    document.querySelector('.fbtn[data-f="all"]').classList.remove('on');
+    if(filters.has(f)){filters.delete(f);btn.classList.remove('on');}
+    else{filters.add(f);btn.classList.add('on');}
+    if(!filters.size){filters.add('all');document.querySelector('.fbtn[data-f="all"]').classList.add('on');}
+  }
+  renderPins();
+});
+
+// ===== SEARCH =====
+$('searchIn').addEventListener('input',function(){
+  var q=this.value.toLowerCase().trim(),res=$('searchRes');
+  if(q.length<2){res.innerHTML='';return;}
+  var m=CLIENTS.filter(function(c){return c.name.toLowerCase().indexOf(q)>=0;}).slice(0,10);
+  res.innerHTML=m.map(function(c){
+    return '<div class="sitem" data-id="'+esc(c.id)+'"><span style="color:'+(PCOL[c._pin]||'#fff')+'">*</span> '+esc(c.name)+'</div>';
+  }).join('');
+  res.querySelectorAll('.sitem').forEach(function(el){
+    el.addEventListener('click',function(){
+      var cl=CLIENTS.find(function(c){return c.id===el.dataset.id;});
+      if(!cl) return;
+      if(cl._lat!=null){
+        if(useCesium&&viewer) viewer.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(cl._lng,cl._lat,1200),orientation:{heading:0,pitch:Cesium.Math.toRadians(-45),roll:0},duration:1.5});
+        else if(lmap) lmap.flyTo([cl._lat,cl._lng],17);
+      }
+      showClient(cl);
+      res.innerHTML='';$('searchIn').value='';
+    });
+  });
+});
+
+// ===== ROUTE =====
+$('optBtn').addEventListener('click',function(){
+  routeStops=[];
+  RAW.jobs.forEach(function(j){
+    if(j.jobStatus!=='upcoming') return;
+    var addr='';
+    if(j.property&&j.property.address){
+      var a=j.property.address;
+      addr=[a.street,a.city,a.postalCode].filter(Boolean).join(', ');
+    }
+    var g=GEO[addr];
+    if(!g){
+      // Try to find from client
+      var cl=CLIENTS.find(function(c){return c.id===j.client.id;});
+      if(cl&&cl._lat!=null){g={lat:cl._lat,lng:cl._lng};addr=cl._addr;}
+    }
+    if(g&&g.lat){
+      routeStops.push({name:j.client.name,title:j.title,addr:addr,date:(j.startAt||'').split('T')[0],lat:g.lat,lng:g.lng});
+    }
+  });
+  // Sort by date
+  routeStops.sort(function(a,b){return a.date<b.date?-1:1;});
+  if(!routeStops.length){
+    $('rList').innerHTML='<div style="font-size:.65rem;color:#5a6a82;padding:6px">No geocoded upcoming jobs</div>';return;
+  }
+  $('rList').innerHTML=routeStops.map(function(s){
+    return '<div class="ritem"><div>'+esc(s.name)+'</div><div class="rd">'+esc(s.date)+' - '+esc(s.title||'').substring(0,40)+'</div></div>';
+  }).join('');
+  $('calcBtn').style.display='block';
+});
+
+$('calcBtn').addEventListener('click',async function(){
+  if(routeStops.length<2){$('rDist').textContent='Need 2+ stops';return;}
+  $('calcBtn').textContent='Calculating...';
+  var coords=routeStops.map(function(s){return s.lng+','+s.lat;}).join(';');
+  try{
+    var r=await fetch(C.osrm+coords+'?overview=full&geometries=geojson');
+    var d=await r.json();
+    if(d.routes&&d.routes[0]){
+      var rt=d.routes[0];
+      $('rDist').textContent=(rt.distance/1000).toFixed(1)+' km / '+Math.round(rt.duration/60)+' min';
+      var pts=rt.geometry.coordinates;
+      if(useCesium&&viewer){
+        if(routeEnt) viewer.entities.remove(routeEnt);
+        routeEnt=viewer.entities.add({polyline:{
+          positions:pts.map(function(p){return Cesium.Cartesian3.fromDegrees(p[0],p[1]);}),
+          width:4,material:new Cesium.PolylineGlowMaterialProperty({glowPower:0.3,color:Cesium.Color.fromCssColorString('#5eb0ff')}),
+          clampToGround:true
+        }});
+      }else if(lmap){
+        L.polyline(pts.map(function(p){return [p[1],p[0]];}),{color:'#5eb0ff',weight:3}).addTo(lmap);
+      }
+    }
+  }catch(e){$('rDist').textContent='Route failed';}
+  $('calcBtn').textContent='Calculate Route';
+});
+
+// ===== RIGHT PANEL =====
+$('ptog').addEventListener('click',function(){
+  $('rpanel').classList.toggle('open');$('ptog').classList.toggle('shifted');
+});
+$('mapZoomIn').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();mapZoomInAction();});
+$('mapZoomOut').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();mapZoomOutAction();});
+$('mapNavHintX').addEventListener('click',function(){localStorage.setItem('qc_mapHint','0');var el=$('mapNavHint');if(el)el.style.display='none';});
+$('weatherToggle').addEventListener('change',function(){
+  syncWeatherBlock();
+  if(this.checked)loadWeather();
+});
+$('btnRefresh').addEventListener('click',function(){refreshData();});
+$('btnStreetTop').addEventListener('click',function(){openStreetView();});
+$('cpStreetBtn').addEventListener('click',function(){openStreetView();});
+$('cpCallCtxBtn').addEventListener('click',function(){sendCallContext();});
+$('svClose').addEventListener('click',closeStreetViewModal);
+$('svBackdrop').addEventListener('click',closeStreetViewModal);
+document.querySelectorAll('.tab').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('on');});
+    document.querySelectorAll('.tpane').forEach(function(x){x.classList.remove('on');});
+    t.classList.add('on');$('tp-'+t.dataset.t).classList.add('on');
+  });
+});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeStreetViewModal();});
+
+// ===== ML SERVICE MIX =====
+async function loadMLPredict(){
+  if(!C.mlApi) return;
+  var el=$('mlPred'); if(!el) return;
+  el.textContent='Loading ML prediction...';
+  try{
+    var r=await fetch(C.mlApi+'/predict/service-mix?horizon=1');
+    if(!r.ok){
+      el.innerHTML='<span style="color:#888">ML unavailable ('+r.status+'). Run <code style="font-size:.55rem">GET '+esc(C.mlApi)+'/ingest</code> first.</span>';
+      return;
+    }
+    var d=await r.json();
+    var w=d.weeks&&d.weeks[0];
+    if(!w){ el.textContent='No prediction payload'; return; }
+    var p=w.predicted_mix_ml||w.predicted_mix_baseline;
+    var rows=Object.keys(p).sort(function(a,b){return p[b]-p[a];}).map(function(k){
+      return '<div style="display:flex;justify-content:space-between;margin:3px 0"><span>'+esc(k)+'</span><span style="color:#5eb0ff">'+Math.round(p[k]*100)+'%</span></div>';
+    }).join('');
+    var meta=(d.model||'?')+' · trained_weeks='+String(d.trained_weeks||0)+(d.validation_log_loss!=null?' · val_log_loss='+d.validation_log_loss.toFixed(3):'')+' · '+esc(d.note||'');
+    el.innerHTML='<div style="color:#5a6a82;margin-bottom:6px;font-size:.55rem">'+esc(meta)+'</div>'+rows;
+  }catch(e){
+    el.textContent='ML service unreachable (uvicorn app.main:app --port 8788)';
+  }
+}
+
+// ===== WEATHER =====
+function syncWeatherBlock(){
+  var t=$('weatherToggle'),wb=$('weatherBlock');
+  if(!t||!wb)return;
+  wb.style.display=t.checked?'block':'none';
+}
+
+async function loadWeather(){
+  if(!$('weatherToggle')||!$('weatherToggle').checked)return;
+  try{
+    var r=await fetch('https://api.aerisapi.com/observations/montreal,qc?client_id='+C.aerisId+'&client_secret='+C.aerisSec);
+    var d=await r.json();
+    if(d.success&&d.response&&d.response.ob){
+      $('wTemp').textContent=Math.round(d.response.ob.tempC||0)+'C';
+      $('wDesc').textContent=d.response.ob.weatherShort||d.response.ob.weather||'';
+    }
+    var fr=await fetch('https://api.aerisapi.com/forecasts/montreal,qc?client_id='+C.aerisId+'&client_secret='+C.aerisSec+'&limit=7');
+    var fd=await fr.json();
+    if(fd.success&&fd.response&&fd.response[0]&&fd.response[0].periods){
+      var rain=fd.response[0].periods.some(function(p){return (p.weatherPrimary||'').toLowerCase().indexOf('rain')>=0;});
+      $('wAdv').innerHTML=rain
+        ?'<div class="wadv warn">Rain forecast - Avoid pressure washing bookings</div>'
+        :'<div class="wadv ok">Clear conditions - Good for all services</div>';
+    }
+  }catch(e){$('wDesc').textContent='Weather unavailable';}
+}
+
+// ===== CHARTS =====
+function co(legend){return{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:!!legend,labels:{color:'#7a8aa0',font:{family:'JetBrains Mono',size:9}}}},scales:{x:{ticks:{color:'#5a6a82',font:{family:'JetBrains Mono',size:8}},grid:{color:'rgba(100,160,230,0.06)'}},y:{ticks:{color:'#5a6a82',font:{family:'JetBrains Mono',size:8}},grid:{color:'rgba(100,160,230,0.08)'}}}}}
+
+function detectSvc(t){
+  if(!t) return 'Other';t=t.toLowerCase();
+  if(t.indexOf('vitre')>=0||t.indexOf('window')>=0) return 'Windows';
+  if(t.indexOf('goutti')>=0||t.indexOf('gutter')>=0) return 'Gutters';
+  if(t.indexOf('araign')>=0||t.indexOf('spider')>=0) return 'Spider';
+  if(t.indexOf('pression')>=0||t.indexOf('pressure')>=0||t.indexOf('power wash')>=0) return 'Pressure';
+  if(t.indexOf('toit')>=0||t.indexOf('roof')>=0) return 'Roof';
+  return 'Other';
+}
+
+function buildCharts(){
+  ['cMonths','cDemand','cVolume'].forEach(function(id){
+    var cv=$(id);
+    if(!cv)return;
+    var ch=typeof Chart!=='undefined'&&Chart.getChart?Chart.getChart(cv):null;
+    if(ch&&typeof ch.destroy==='function'){try{ch.destroy();}catch(e){}}
+  });
+  var MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // Jobs by month
+  var mc={};
+  RAW.jobs.forEach(function(j){
+    var dt=j.startAt||j.createdAt;if(!dt) return;
+    var m=new Date(dt).getMonth();if(!isNaN(m)) mc[m]=(mc[m]||0)+1;
+  });
+  new Chart($('cMonths').getContext('2d'),{type:'bar',data:{labels:MN,datasets:[{label:'Jobs',data:MN.map(function(_,i){return mc[i]||0;}),backgroundColor:'rgba(94,176,255,0.28)',borderColor:'#5eb0ff',borderWidth:1}]},options:co()});
+
+  // Service demand stacked by month
+  var svcs=['Windows','Gutters','Spider','Pressure','Other'];
+  var cols=['#5fd89a','#5eb0ff','#e8a84a','#e86666','#e8c44a'];
+  var sm={};
+  RAW.jobs.forEach(function(j){
+    var dt=j.startAt||j.createdAt;if(!dt) return;
+    var m=new Date(dt).getMonth(),s=detectSvc(j.title);
+    if(!sm[s]) sm[s]={};sm[s][m]=(sm[s][m]||0)+1;
+  });
+  new Chart($('cDemand').getContext('2d'),{type:'bar',data:{labels:MN,datasets:svcs.map(function(s,i){return{label:s,data:MN.map(function(_,m){return (sm[s]||{})[m]||0;}),backgroundColor:cols[i]+'55',borderColor:cols[i],borderWidth:1};})},options:Object.assign({},co(true),{scales:{x:Object.assign({stacked:true},co().scales.x),y:Object.assign({stacked:true},co().scales.y)}})});
+
+  // Volume over time
+  var vol={};
+  RAW.jobs.forEach(function(j){var dt=j.createdAt;if(!dt) return;var k=dt.substring(0,7);vol[k]=(vol[k]||0)+1;});
+  var sk=Object.keys(vol).sort();
+  new Chart($('cVolume').getContext('2d'),{type:'line',data:{labels:sk,datasets:[{label:'Jobs',data:sk.map(function(k){return vol[k];}),borderColor:'#5eb0ff',backgroundColor:'rgba(94,176,255,0.12)',fill:true,tension:.4,pointRadius:2,pointBackgroundColor:'#5eb0ff'}]},options:co()});
+}
+
+// ===== AREAS =====
+function buildAreas(){
+  var areas={};
+  CLIENTS.forEach(function(c){
+    if(!c._addr) return;
+    var area='Unknown';
+    // Extract neighbourhood from address
+    var street=(c.billingAddress&&c.billingAddress.street)||'';
+    var city=(c.billingAddress&&c.billingAddress.city)||'';
+    // Many Jobber addresses embed neighbourhood in the street field
+    var known=['Verdun','LaSalle','Saint-Laurent','Ahuntsic','Brossard','Westmount','Outremont','Lachine','Le Sud-Ouest','Ville-Marie'];
+    for(var i=0;i<known.length;i++){
+      if(street.indexOf(known[i])>=0||city.indexOf(known[i])>=0){area=known[i];break;}
+    }
+    if(area==='Unknown'&&city) area=city;
+
+    if(!areas[area]) areas[area]={clients:0,jobs:0,revenue:0,paid:0};
+    areas[area].clients++;
+    areas[area].jobs+=c._jobs.length;
+    areas[area].revenue+=c._totalInvoiced;
+    areas[area].paid+=c._paidTotal;
+  });
+  var sorted=Object.entries(areas).sort(function(a,b){return b[1].clients-a[1].clients;});
+  var maxC=sorted[0]?sorted[0][1].clients:1;
+  $('areaList').innerHTML=sorted.slice(0,20).map(function(e){
+    var n=e[0],d=e[1],int=Math.min(1,d.clients/maxC);
+    return '<div class="ncard" style="border-left:3px solid rgba(94,176,255,'+(0.2+int*0.55)+')"><div class="nn">'+esc(n)+'</div><div class="ns"><span>Clients: <b>'+d.clients+'</b></span><span>Jobs: <b>'+d.jobs+'</b></span><span>Revenue: <b>'+fmt$(d.revenue)+'</b></span><span>Paid: <b>'+fmt$(d.paid)+'</b></span></div></div>';
+  }).join('');
+}
+
+// ===== AI =====
+function toggleAI(){$('aipanel').classList.toggle('open');}
+$('aiIn').addEventListener('keydown',function(e){if(e.key==='Enter') sendAI();});
+async function sendAI(){
+  var msg=$('aiIn').value.trim();if(!msg) return;$('aiIn').value='';
+  var el=$('aiMsgs');
+  el.innerHTML+='<div class="ai-m u">'+esc(msg)+'</div><div class="ai-m s" id="aiW">Thinking...</div>';
+  el.scrollTop=el.scrollHeight;
+  var pc={};CLIENTS.forEach(function(c){pc[c._pin]=(pc[c._pin]||0)+1;});
+  var tc={};CLIENTS.forEach(function(c){c._tags.forEach(function(t){tc[t]=(tc[t]||0)+1;});});
+  var tt=Object.entries(tc).sort(function(a,b){return b[1]-a[1];}).slice(0,15);
+  var topRev=CLIENTS.filter(function(c){return c._totalInvoiced>0;}).sort(function(a,b){return b._totalInvoiced-a._totalInvoiced;}).slice(0,10);
+  var sum='Total clients: '+CLIENTS.length+', Jobs: '+RAW.jobs.length+', Quotes: '+RAW.quotes.length+', Invoices: '+RAW.invoices.length+'\n';
+  sum+='Upcoming jobs: '+RAW.jobs.filter(function(j){return j.jobStatus==='upcoming';}).length+'\n';
+  sum+='Pins: green='+( pc.green||0)+' yellow='+(pc.yellow||0)+' blue='+(pc.blue||0)+' orange='+(pc.orange||0)+' red='+(pc.red||0)+'\n';
+  sum+='Paid revenue: '+fmt$(RAW.invoices.filter(function(i){return i.invoiceStatus==='paid';}).reduce(function(s,i){return s+parseFloat(i.total||0);},0))+'\n';
+  sum+='Tags: '+tt.map(function(e){return e[0]+'('+e[1]+')';}).join(', ')+'\n';
+  sum+='Top by revenue: '+topRev.map(function(c){return c.name+': '+fmt$(c._totalInvoiced);}).join(', ')+'\n';
+  sum+='Upcoming jobs list:\n';
+  RAW.jobs.filter(function(j){return j.jobStatus==='upcoming';}).forEach(function(j){
+    sum+='  - '+j.client.name+': '+j.title+' ('+( j.startAt||'').split('T')[0]+')\n';
+  });
+  try{
+    var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':'','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:'You are a business intelligence analyst for Tirith (operations dashboard for a Montreal exterior cleaning company). You have access to all their client, job, quote, and invoice data. Answer questions about their business performance, identify opportunities, suggest which neighbourhoods to target, predict demand based on season, and help optimize their operations. Be direct and actionable. Speak like a sharp business advisor, not a chatbot.\n\nCurrent date: '+new Date().toISOString().split('T')[0]+'\n\n'+sum,messages:[{role:'user',content:msg}]})});
+    var d=await r.json();
+    var reply=(d.content&&d.content[0]&&d.content[0].text)||(d.error&&d.error.message)||'Add your Anthropic API key to enable AI.';
+    var w=document.getElementById('aiW');if(w)w.remove();
+    el.innerHTML+='<div class="ai-m a">'+esc(reply)+'</div>';
+  }catch(e){
+    var w2=document.getElementById('aiW');if(w2)w2.remove();
+    el.innerHTML+='<div class="ai-m a">AI unavailable. Add API key to the code.</div>';
+  }
+  el.scrollTop=el.scrollHeight;
+}
+
+// ===== REFRESH =====
+setInterval(async function(){
+  await fetchData();buildClients();enrich();renderPins();updateStats();
+},C.refresh);
+
+// ===== INIT =====
+async function init(){
+  setLoadStatus('Connecting to Jobber...');
+  var ok=await fetchData();
+  if(!ok){
+    setLoadStatus('No data - check webhook');
+    $('loadingOverlay').style.display='none';
+    var sh=$('setupHelp');
+    sh.style.display='block';
+    sh.innerHTML='<h2>Dashboard needs data</h2><p>The Jobber webhook did not return usable data, and there is no saved copy in this browser yet.</p><ol><li>Confirm the n8n webhook URL in <code>index.html</code> (<code>C.webhook</code>) still works.</li><li>Open the app at <code>http://127.0.0.1:9090/</code> (not a <code>file:///</code> path). If that port is busy, pick another and match the URL.</li><li>After a successful load once, data is cached in this browser for offline use.</li></ol>';
+    return;
+  }
+
+  setLoadStatus('Building client database...');
+  buildClients();
+  enrich();
+  console.log('Unified:',CLIENTS.length,'clients. With address:',CLIENTS.filter(function(c){return !!c._addr;}).length);
+  console.log('Pin breakdown:',{
+    green:CLIENTS.filter(function(c){return c._pin==='green';}).length,
+    yellow:CLIENTS.filter(function(c){return c._pin==='yellow';}).length,
+    blue:CLIENTS.filter(function(c){return c._pin==='blue';}).length,
+    orange:CLIENTS.filter(function(c){return c._pin==='orange';}).length,
+    red:CLIENTS.filter(function(c){return c._pin==='red';}).length
+  });
+
+  var cesiumOk=initCesium();
+  if(!cesiumOk){setLoadStatus('Using flat map...');initLeaflet();}
+
+  setLoadStatus('Geocoding addresses...');
+  await geocode();
+  console.log('With coords:',CLIENTS.filter(function(c){return c._lat!=null;}).length);
+
+  setLoadStatus('Rendering...');
+  renderPins();updateStats();
+  syncWeatherBlock();
+  if($('weatherToggle')&&$('weatherToggle').checked)await loadWeather();
+  try{buildCharts();}catch(e){console.error('Charts:',e);}
+  try{buildAreas();}catch(e){console.error('Areas:',e);}
+  try{loadMLPredict();}catch(e){console.warn('ML:',e);}
+
+  $('loadingOverlay').style.display='none';
+  console.log('Tirith loaded.');
+}
+
+async function boot(){
+  if(location.protocol==='file:'){
+    $('loadingOverlay').style.display='flex';
+    $('loadStatus').innerHTML='This page was opened from disk (<code>file:///</code>). Browsers block that for security.<br><br><strong style="color:#5eb0ff">Do this instead:</strong><ol style="text-align:left;margin:12px 0 0 18px;max-width:480px;line-height:1.6"><li>Open PowerShell in the project folder.</li><li>Run: <code style="display:block;margin-top:6px">python -m http.server 9090</code></li><li>In the browser go to: <code>http://127.0.0.1:9090/</code></li><li>If you see an EDB Postgres page instead, port 8080 is taken by Postgres — keep using <code>9090</code> (or any free port).</li></ol>';
+    var sp=document.querySelector('#loadingOverlay .spinner');if(sp)sp.style.display='none';
+    return;
+  }
+  try{
+    await init();
+  }catch(err){
+    console.error(err);
+    $('loadingOverlay').style.display='flex';
+    setLoadStatus('');
+    $('loadStatus').textContent='Startup error: '+(err&&err.message?err.message:String(err));
+    var sp=document.querySelector('#loadingOverlay .spinner');if(sp)sp.style.display='none';
+  }
+}
+boot();
+</script>
+</body>
+</html>
